@@ -5,6 +5,8 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
 import software.amazon.awssdk.services.s3.S3Client
 import org.springframework.stereotype.Service
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
@@ -29,22 +31,34 @@ class S3Service(
     private val objectMapper = jacksonObjectMapper()
 
     /**
-     * 1. Download latest metadata to temporary file
+     * Initialize models when application starts
+     * This will run once the application is fully initialized
+     */
+    @EventListener(ApplicationReadyEvent::class)
+    fun initializeModel() {
+        log.info("Application started - initializing recommendation model...")
+        try {
+            downloadLatestModel()
+            log.info("Model initialization completed successfully")
+        } catch (e: Exception) {
+            log.error("Error initializing model on startup: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Downloads and extracts the latest movie recommendation model from S3.
      *
-     * Get the latest tracker without modifying any permanent files
-     * This isolates the "checking" from the "updating" steps
+     * The process follows these steps:
+     * 1. Download latest metadata from S3 to identify the current version
+     * 2. Compare with locally installed version (if any)
+     * 3. Download and extract model files if:
+     *    - No local model exists
+     *    - Local model version differs from latest
+     *    - Force download is requested
+     * 4. Clean up temporary files automatically
      *
-     *
-     * Parse and compare versions
-     *
-     * Extract version from temp metadata
-     * Compare with currently loaded version
-     *
-     *
-     * Make a decision
-     *
-     * If version is the same: delete temp file only
-     * If version is newer: proceed with model download and update permanent metadata
+     * This method handles the entire lifecycle of model management, ensuring
+     * the application always has access to recommendation data.
      */
     fun downloadLatestModel() {
         val s3Client: S3Client = S3Client.builder()
@@ -71,8 +85,8 @@ class S3Service(
         val latestVersion = metadata.version
         log.info("Latest model version is: $latestVersion")
 
-        val currentModelDir = Paths.get(downloadDir, "latest-models")
-        val currentMetadataFile = currentModelDir.resolve("metadata.json")
+        val modelDir = Paths.get(downloadDir, "latest-models")
+        val currentMetadataFile = modelDir.resolve("metadata.json")
 
         if (Files.exists(currentMetadataFile)) {
             val currentMetadata = objectMapper.readValue<ModelMetadata>(currentMetadataFile.toFile())
@@ -84,7 +98,6 @@ class S3Service(
             }
         }
 
-        val modelDir = Paths.get(downloadDir, "latest-models")
         Files.createDirectories(modelDir)
 
         val metadataFile = modelDir.resolve("metadata.json")
@@ -106,7 +119,7 @@ class S3Service(
         // Extract the zip file
         try {
             log.info("Extracting model file using Java's ZIP tools")
-            extractZipUsingJava(modelFile.toFile(), modelDir.toFile())
+            extractZip(modelFile.toFile(), modelDir.toFile())
             log.info("Extraction completed successfully")
         } catch (e: Exception) {
             log.error("Error during ZIP extraction: ${e.message}", e)
@@ -123,68 +136,31 @@ class S3Service(
      * Extract a ZIP file using Java's built-in ZIP capabilities.
      * This doesn't rely on external commands being installed.
      */
-    private fun extractZipUsingJava(zipFile: File, destDir: File) {
-        // Create destination directory if it doesn't exist
-        if (!destDir.exists()) {
-            destDir.mkdirs()
-        }
+    private fun extractZip(zipFile: File, destDir: File) {
+        if (!destDir.exists()) destDir.mkdirs()
 
-        // Buffer for reading ZIP entries
-        val buffer = ByteArray(1024)
-
-        try {
-            // Create input streams
-            val fileInputStream = FileInputStream(zipFile)
-            val bufferedInputStream = BufferedInputStream(fileInputStream)
-            val zipInputStream = ZipInputStream(bufferedInputStream)
-
-            // Process each entry in the ZIP file
-            var entry: ZipEntry? = zipInputStream.nextEntry
-            var entriesExtracted = 0
+        ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
+            val buffer = ByteArray(1024)
+            var entry = zis.nextEntry
 
             while (entry != null) {
-                val entryName = entry.name
-                val filePath = File(destDir, entryName)
+                val filePath = File(destDir, entry.name)
 
-                // Create parent directories if they don't exist
-                val parent = filePath.parentFile
-                if (!parent.exists()) {
-                    parent.mkdirs()
-                }
-
-                // If the entry is a directory, create it and skip to next entry
                 if (entry.isDirectory) {
                     filePath.mkdirs()
                 } else {
-                    // Extract the file
-                    val fileOutputStream = FileOutputStream(filePath)
-                    var len: Int
-
-                    while (zipInputStream.read(buffer).also { len = it } > 0) {
-                        fileOutputStream.write(buffer, 0, len)
-                    }
-
-                    fileOutputStream.close()
-                    entriesExtracted++
-
-                    // Log progress for large archives
-                    if (entriesExtracted % 100 == 0) {
-                        log.debug("Extracted $entriesExtracted entries...")
+                    filePath.parentFile.mkdirs()
+                    FileOutputStream(filePath).use { fos ->
+                        var len: Int
+                        while (zis.read(buffer).also { len = it } > 0) {
+                            fos.write(buffer, 0, len)
+                        }
                     }
                 }
 
-                // Close the current entry and get the next one
-                zipInputStream.closeEntry()
-                entry = zipInputStream.nextEntry
+                zis.closeEntry()
+                entry = zis.nextEntry
             }
-
-            // Close the ZIP input stream
-            zipInputStream.close()
-            log.info("Extracted $entriesExtracted files from ZIP archive")
-
-        } catch (e: Exception) {
-            log.error("Error extracting ZIP file: ${e.message}", e)
-            throw RuntimeException("Failed to extract ZIP file: ${e.message}", e)
         }
     }
 }
