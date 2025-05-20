@@ -5,7 +5,7 @@ FROM eclipse-temurin:17-jdk
 WORKDIR /app
 
 # Copy the JAR file built by Gradle
-COPY build/libs/moodie-api-gateway-0.0.1-SNAPSHOT.jar app.jar
+COPY build/libs/movie-recommendation-service-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose the port Spring Boot runs on
 EXPOSE 5008
