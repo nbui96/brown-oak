@@ -32,8 +32,7 @@ class MoviesController (
     fun getRecommend(
         @RequestParam(required = true) movieId: String
     ): MoviesResponse {
-//        val recommendations = movieService.getRecommendations(movieId)
-        movieService.downloadLatestModel()
+        val recommendations = movieService.getRecommendations(movieId)
 
         return MoviesResponse(
             success = true,

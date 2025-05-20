@@ -46,14 +46,6 @@ class MovieService(
     fun getRecommendations(
         movieId: String
     ): Recommendations = runBlocking {
-
-        try {
-            s3Service.downloadLatestModel()
-        } catch (e: Exception) {
-            println("Error: $e")
-            e.printStackTrace()
-        }
-
         val grpcMovieRequest = MovieRequest.newBuilder()
             .setMovieId(movieId)
             .build()
@@ -61,14 +53,5 @@ class MovieService(
         val recommendationsResponse = grpcClient.recommend(grpcMovieRequest)
 
         return@runBlocking recommendationsResponse
-    }
-
-    fun downloadLatestModel() {
-        try {
-            s3Service.downloadLatestModel()
-        } catch (e: Exception) {
-            println("Error: $e")
-            e.printStackTrace()
-        }
     }
 }
