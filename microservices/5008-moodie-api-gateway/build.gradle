@@ -8,6 +8,19 @@ plugins {
     id 'com.google.protobuf' version '0.9.4'
 }
 
+// Define versions in a central place for easier maintenance
+ext {
+    kotlinVersion = '1.9.25'
+    springBootVersion = '3.4.5'
+    springDependencyManagementVersion = '1.1.7'
+    springGrpcVersion = '0.8.0'
+    protobufVersion = '4.28.2'
+    grpcVersion = '1.53.0'
+    grpcKotlinVersion = '1.4.0'
+    kotlinCoroutinesVersion = '1.7.1'
+    protocVersion = '3.21.12'
+}
+
 group = 'com.apani'
 version = '0.0.1-SNAPSHOT'
 
@@ -21,27 +34,36 @@ repositories {
     mavenCentral()
 }
 
-ext {
-    set('springGrpcVersion', "0.8.0")
-}
-
 dependencies {
+    // Spring Boot dependencies
     implementation 'org.springframework.boot:spring-boot-starter-data-rest'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
-    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
-    implementation 'com.google.protobuf:protobuf-java:4.28.2'
-    implementation 'com.google.protobuf:protobuf-kotlin:4.28.2'
-    implementation 'com.google.protobuf:protobuf-java-util:4.28.2'
-    implementation 'software.amazon.awssdk:s3:2.20.136'
-    implementation 'io.grpc:grpc-services'
-    implementation 'org.jetbrains.kotlin:kotlin-reflect'
-    implementation 'io.grpc:grpc-protobuf:1.53.0'
-    implementation 'io.grpc:grpc-stub:1.53.0'
-    implementation 'io.grpc:grpc-kotlin-stub:1.4.0'
-    implementation 'org.springframework.grpc:spring-grpc-spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1'
+
+    // Kotlin dependencies
+    implementation 'org.jetbrains.kotlin:kotlin-reflect'
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${kotlinCoroutinesVersion}"
+    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+
+    // Protobuf dependencies
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation "com.google.protobuf:protobuf-kotlin:${protobufVersion}"
+    implementation "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
+    // gRPC dependencies
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "io.grpc:grpc-kotlin-stub:${grpcKotlinVersion}"
+    implementation 'io.grpc:grpc-services'
+    implementation 'org.springframework.grpc:spring-grpc-spring-boot-starter'
+
+    // AWS dependencies
+    implementation 'software.amazon.awssdk:s3:2.20.136'
+
+    // Utilities
     implementation 'org.projectlombok:lombok'
+
+    // Test dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
     testImplementation 'org.springframework.graphql:spring-graphql-test'
@@ -55,31 +77,35 @@ dependencyManagement {
     }
 }
 
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.addAll '-Xjsr305=strict'
+tasks.withType(KotlinCompile).configureEach {
+    kotlinOptions {
+        freeCompilerArgs += "-Xjsr305=strict"
+        jvmTarget = "17"
     }
+    dependsOn 'generateProto'
 }
 
+// Protobuf configuration
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.21.12'
+        artifact = "com.google.protobuf:protoc:${protocVersion}"
     }
+
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.53.0'
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
         }
         grpckt {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:1.4.0:jdk8@jar"
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:${grpcKotlinVersion}:jdk8@jar"
         }
     }
+
     generateProtoTasks {
         all().each { task ->
             task.plugins {
                 grpc {}
                 grpckt {}
             }
-            // Add Kotlin code generation
             task.builtins {
                 java {}
                 kotlin {}
@@ -109,19 +135,8 @@ sourceSets {
     }
 }
 
-// Fix for duplicate proto files issue
 tasks.withType(Copy).configureEach {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-// Configure Kotlin compiler
-tasks.withType(KotlinCompile).configureEach {
-    kotlinOptions {
-        freeCompilerArgs += "-Xjsr305=strict"
-        jvmTarget = "17"
-    }
-    // Make sure protobuf generation happens before Kotlin compilation
-    dependsOn 'generateProto'
 }
 
 tasks.named('test') {
