@@ -2,6 +2,7 @@ package com.apani.moodieapigateway.controller
 
 import com.apani.moodieapigateway.model.rest.AutoCompleteResponse
 import com.apani.moodieapigateway.model.rest.MoviesResponse
+import com.apani.moodieapigateway.model.rest.RecommendResponse
 import com.apani.moodieapigateway.service.MovieService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -24,6 +25,19 @@ class MoviesController (
             success = true,
             message = "Autocomplete suggestions retrieved successfully",
             data = AutoCompleteResponse(suggestions = suggestions)
+        )
+    }
+
+    @GetMapping("/recommend")
+    fun getRecommend(
+        @RequestParam(required = true) movieId: String
+    ): MoviesResponse {
+//        val recommendations = movieService.getRecommendations(movieId)
+        movieService.downloadLatestModel()
+
+        return MoviesResponse(
+            success = true,
+            message = "Recommendations retrieved successfully",
         )
     }
 }

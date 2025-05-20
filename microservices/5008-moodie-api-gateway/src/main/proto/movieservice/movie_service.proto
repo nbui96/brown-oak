@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package movieservice;
+
+option java_package = "movieservice";
+option java_outer_classname = "MovieServiceProto";
+option java_multiple_files = true;
+
+service MovieService {
+  rpc Recommend (MovieRequest) returns (Recommendations);
+}
+
+message MovieRequest {
+  string movie_id = 1;
+}
+
+message Recommendations {
+  repeated Movie movies = 1;
+}
+
+message Movie {
+  string id = 1;
+  string title = 2;
+  string overview = 3;
+  string poster_path = 4;
+}
